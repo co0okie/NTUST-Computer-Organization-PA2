@@ -1,0 +1,287 @@
+\documentclass[12pt]{article}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{listings}
+\usepackage{courier}
+\usepackage{color}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{ctex}
+\setmainfont{Times New Roman}
+
+\definecolor{lightgray}{gray}{0.95}
+\lstset{
+    basicstyle=\footnotesize\ttfamily,
+    backgroundcolor=\color{lightgray},
+    frame=single,
+    breaklines=true,
+    tabsize=2,
+}
+
+% Title format customization (optional)
+\titleformat{\section}[block]{\large\bfseries}{\thesection.}{1em}{}
+\titleformat{\subsection}[block]{\normalsize\bfseries}{\thesubsection.}{1em}{}
+
+\begin{document}
+\kaishu
+%--------------------%
+%        Cover       %
+%--------------------%
+
+\begin{titlepage}
+    \thispagestyle{empty}
+    \vspace*{\fill} % push content to center vertically
+    \begin{center}
+        \LARGE\textbf{Computer Organization PA2} \\[1.0em]
+        \Large Implement a single cycle MIPS CPU \\[2.0em]
+        \normalsize
+        \textbf{Student ID:} B11107051 \\[0.5em]
+        \textbf{Name:} 李品翰 \\[0.5em]
+        \textbf{Area:} 34021.4 \quad
+        \textbf{Slack:} 4.3645 \\[2em]
+    \end{center}
+    \vspace*{\fill} % push content to center vertically
+\end{titlepage}
+
+%--------------------%
+%  Module Description %
+%--------------------%
+
+\section{Module Implementation}
+
+Since Part I and Part II are subsets of Part III, only Part III is explained in detail below.
+
+\subsection{RF.v}
+\begin{itemize}
+    \item \texttt{RdAddr != 5'b0} ensures that register \$0 is read-only.
+    \begin{lstlisting}[language=Verilog]
+always @(negedge clk)
+    if (RegWrite && RdAddr != 5'b0) 
+        R[RdAddr] <= RdData;
+    \end{lstlisting}
+\end{itemize}
+
+\subsection{IM.v}
+\begin{itemize}
+    \item Provides instruction words in big-endian format.
+    \begin{lstlisting}[language=Verilog]
+assign Instr = {
+    InstrMem[InstrAddr],
+    InstrMem[InstrAddr + 1],
+    InstrMem[InstrAddr + 2],
+    InstrMem[InstrAddr + 3]
+};
+    \end{lstlisting}
+\end{itemize}
+
+\subsection{DM.v}
+\begin{itemize}
+    \item In my design, \texttt{MemRead} is not required, \texttt{MemReadData} can be assign directly with combinational logic.
+    \begin{lstlisting}[language=Verilog]
+assign MemReadData = {
+    DataMem[MemAddr], 
+    DataMem[MemAddr + 1], 
+    DataMem[MemAddr + 2], 
+    DataMem[MemAddr + 3]
+};
+    \end{lstlisting}
+\end{itemize}
+
+\subsection{Control.v}
+\begin{itemize}
+    \item The control unit is implemented using a large \texttt{case} statement. Any unknown OpCode will be considerd to be a \texttt{nop}.
+    \begin{lstlisting}[language=Verilog]
+default: begin // nop
+    Reg_dst    <= 1'bx;
+    Branch     <= 1'b0;
+    Reg_w      <= 1'b0;
+    ALU_src    <= 1'bx;
+    Mem_w      <= 1'b0;
+    Mem_to_reg <= 1'bx;
+    Jump       <= 1'b0;
+    ALU_op     <= 2'bxx;
+end
+    \end{lstlisting}
+\end{itemize}
+
+\subsection{SimpleCPU.v}
+\begin{enumerate}
+    \item All multiplexers are implemented using ternary operators. For example:
+    \begin{lstlisting}[language=Verilog]
+assign Output_Addr = 
+    Jump ? {NextPC[31:28], Instruction[25:0], 2'b00} :
+    (Branch & Zero) ? NextPC + {imm_extend[29:0], 2'b00} : NextPC;
+    \end{lstlisting}
+    \item \texttt{DM.MemRead} is simply assigned with a logic high:
+    \begin{lstlisting}[language=Verilog]
+DM Data_Memory(..., .MemRead(1'b1), ...);
+    \end{lstlisting}
+\end{enumerate}
+
+%--------------------%
+%    Testing Modules %
+%--------------------%
+
+\section{Module Testing and Execution Results}
+
+
+
+\subsection*{Assembler}
+A assembler script (\texttt{assembler.py}) written by ChatGPT was developed to generate the \texttt{IM.dat} file from a \texttt{main.a} file with MIPS assembly inside.
+
+\subsection*{Part I}
+
+\begin{itemize}
+    \item 
+\textbf{main.a}
+\begin{lstlisting}[language={}, frame=single]
+addu $25, $8, $9
+addu $26, $7, $1
+subu $27, $0, $1
+subu $28, $0, $7
+sll $29, $2, 30
+sll $30, $2, 31
+or $31, $3, $4
+\end{lstlisting}
+
+\item 
+\textbf{RF.dat}
+\begin{lstlisting}[language={}]
+0000_0000   // R[0]
+0000_0001   // R[1]
+0000_0002   // R[2]
+0F0F_0F0F   // R[3]
+3333_3333   // R[4]
+F7F7_F7F7   // R[5]
+7FFF_FFFF   // R[6]
+FFFF_FFFF   // R[7]
+FFFF_0000   // R[8]
+0000_FFFF   // R[9]
+...
+\end{lstlisting}
+
+\item 
+\textbf{RF.out}
+\begin{lstlisting}[language={}]
+...
+ffffffff   // R[25]
+00000000   // R[26]
+ffffffff   // R[27]
+00000001   // R[28]
+80000000   // R[29]
+00000000   // R[30]
+3f3f3f3f   // R[31]
+\end{lstlisting}
+\end{itemize}
+
+\subsection*{Part II}
+\begin{itemize}
+\item 
+\textbf{main.a}
+\begin{lstlisting}[language={}, frame=single]
+# the main idea is to get the number 0x00114514
+addiu $1, $0, 1284
+ori $2, $1, 17428
+addiu $3, $0, 16
+ori $4, $3, 1
+sw $2, 2($0)
+sw $4, 0($0)
+lw $5, 2($0)
+\end{lstlisting}
+
+\item \textbf{RF.dat, DM.dat} \\
+They can be arbitrary because all values are initialized by \texttt{addiu}.
+
+\item
+\textbf{RF.out}
+\begin{lstlisting}[language={}]
+00000000 // R[0]
+00000504 // R[1]
+00004514 // R[2]
+00000010 // R[3]
+00000011 // R[4]
+00114514 // R[5]
+...
+\end{lstlisting}
+
+\item
+\textbf{DM.out}
+\begin{lstlisting}[language={}]
+00 // Addr = 0x00
+00 // Addr = 0x01
+00 // Addr = 0x02
+11 // Addr = 0x03
+45 // Addr = 0x04
+14 // Addr = 0x05
+...
+\end{lstlisting}
+\end{itemize}
+
+\subsection*{Part III}
+
+\begin{itemize}
+\item 
+\textbf{main.a}
+\begin{lstlisting}[language={}, frame=single]
+# let DM.out be 00 01 02 03 04 ...
+addu $1, $0, $0
+addiu $2, $0, 128
+addiu $3, $0, 1
+sll $3, $3, 24
+addu $4, $0, $0
+sw $4, 0($1)
+addiu $1, $1, 1
+addu $4, $4, $3
+beq $1, $2, 1
+j 5
+\end{lstlisting}
+
+\item 
+\textbf{RF.out}
+\begin{lstlisting}[language={}]
+00000000 // R[0]
+00000080 // R[1]
+00000080 // R[2]
+01000000 // R[3]
+80000000 // R[4]
+...
+\end{lstlisting}
+
+\item 
+\textbf{DM.out}
+\begin{lstlisting}[language={}]
+00 // Addr = 0x00
+01 // Addr = 0x01
+02 // Addr = 0x02
+03 // Addr = 0x03
+04 // Addr = 0x04
+05 // Addr = 0x05
+...
+7e // Addr = 0x7E
+7f // Addr = 0x7F
+\end{lstlisting}
+\end{itemize}
+
+%--------------------%
+%   Datapath Rethinking  %
+%--------------------%
+
+\section{Datapath Rethinking}
+
+In PA1, the multiplier and divider were implemented using shifts, additions, and subtractions over 32 clock cycles. This means that an instruction must be locked until the operation finishes. To support this, the datapath needs these changes:
+\begin{itemize}
+    \item \textbf{Instruction Locking:} Add one more multiplexer in the instruction address path so that the \texttt{Input\_Addr} can directly go to the \texttt{Output\_Addr}, keeping the instruction fixed until the operation is done.
+    \item \textbf{ALU Update:} Add \texttt{srl} (shift right logical) operation into the ALU.
+    \item \textbf{New Registers:} Add 2 registers, HI and LO, to store the full 64-bit result of these operations.
+\end{itemize}
+
+%--------------------%
+%   Conclusion and Insights %
+%--------------------%
+
+\section{Conclusion and Insights}
+
+In this assignment, I successfully built a single-cycle MIPS CPU with a basic instruction set. At first, looking at the architecture diagram, I thought the project would be very challenging. However, once I understood the role of each component, completing each part became much clearer.
+
+This report is also my first experience writing in \LaTeX. Compared to Microsoft Word, \LaTeX saved me a lot of time with formatting so that I could focus on writing the content. Unfortunately, since \LaTeX's support for Traditional Chinese is limited, I had to write this report in English—but that also gave me a chance to practice my English skills.
+
+\end{document}
